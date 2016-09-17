@@ -75,10 +75,12 @@ class HASockets:
       self.connected.append(s)
 
   def sendall(self, command):
+    responses = []
     for s in self.connected:
       s.send(command)
       s = s.recv()
-      print s
+      sd = sock_resp_to_dict(s)
+      print sd
 
 def main(opts):
   sockets = find_sockets(opts.socketdir)
@@ -87,6 +89,15 @@ def main(opts):
   socks = HASockets(sockets)
   socks.connect()
   socks.sendall('show info')
+
+def sock_resp_to_dict(resp):
+  sock_dict = {}
+  for item in resp:
+    if item == "":
+      continue
+    k, v = item.split(":", 1)
+    sock_dict[k] = v
+  return sock_dict
 
 def find_sockets(socketdir):
   sockets = [os.path.join(socketdir,f) for f in os.listdir(socketdir) if is_socket(os.path.join(socketdir,f)) ]
