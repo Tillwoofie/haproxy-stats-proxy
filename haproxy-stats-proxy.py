@@ -7,6 +7,8 @@ import socket
 
 from socket import error as SocketError
 
+NO_MERGE_KEYS = ['Uptime_sec', 'Process_num', 'Ulimit-n', 'Nbproc']
+
 class Socket_wrap:
   def __init__(self, path, readonly = False, timeout = 3, bufsize = 1024):
     self.path = path
@@ -80,7 +82,8 @@ class HASockets:
       s.send(command)
       s = s.recv()
       sd = sock_resp_to_dict(s)
-      print sd
+      responses.append(sd)
+    return responses
 
 def main(opts):
   sockets = find_sockets(opts.socketdir)
@@ -88,11 +91,47 @@ def main(opts):
     print "%s is a socket" % (x,)
   socks = HASockets(sockets)
   socks.connect()
-  socks.sendall('show info')
+  resps = socks.sendall('show info')
+  mresp = merge_show_info(resps)
+  print "Merged Resp:"
+  pretty_print_dict(mresp)
+
+def pretty_print_dict(d):
+  for x in d.keys():
+    print "%s : %s" % (x, d[x])
+
+def get_all_keys(dicts):
+  keys = {}
+  for dict_set in dicts:
+    for k in dict_set.keys():
+      if not k in keys:
+        keys[k] = None
+  return keys.keys()
+
+def merge_show_info(responses):
+  all_keys = get_all_keys(responses)
+  merged_keys = {}
+  for k in all_keys:
+    try:
+      #attempt to cast to int
+      test = int(responses[0][k])
+      if k in NO_MERGE_KEYS:
+        raise ValueError
+    except ValueError:
+      merged_keys[k] = responses[0][k]
+      continue
+    #guess we're good
+    val = 0
+    for resp in responses:
+      val += int(resp[k])
+    merged_keys[k] = val
+  return merged_keys
+
 
 def sock_resp_to_dict(resp):
   sock_dict = {}
   for item in resp:
+    #skip blank lines
     if item == "":
       continue
     k, v = item.split(":", 1)
